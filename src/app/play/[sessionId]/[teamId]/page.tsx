@@ -10,7 +10,6 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ResponsiveContainer,
 } from "recharts";
 
-// ─── helpers ────────────────────────────────────────────────────────────────
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`bg-white rounded-2xl shadow p-5 ${className}`}>{children}</div>;
 }
@@ -22,10 +21,28 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 function Stat({ label, value, sub, red }: { label: string; value: string; sub?: string; red?: boolean }) {
   return (
     <div className="bg-amber-50 rounded-xl p-3 text-center">
-      <div className="text-xs text-amber-600">{label}</div>
+      <div className="text-xs text-amber-700">{label}</div>
       <div className={`text-lg font-bold mt-0.5 ${red ? "text-red-600" : "text-amber-900"}`}>{value}</div>
-      {sub && <div className="text-xs text-gray-400">{sub}</div>}
+      {sub && <div className="text-xs text-amber-600">{sub}</div>}
     </div>
+  );
+}
+
+// ─── Waiting Screen ────────────────────────────────────────────────────────────
+function WaitingScreen({ completedStage }: { completedStage: number }) {
+  return (
+    <Card>
+      <div className="flex flex-col items-center py-8 gap-4">
+        <div className="text-5xl animate-pulse">⏳</div>
+        <div className="text-center">
+          <div className="text-xl font-bold text-amber-900 mb-1">第 {completedStage - 1} 關完成！</div>
+          <div className="text-amber-700">等待老師開放下一關…</div>
+        </div>
+        <div className="bg-amber-50 rounded-xl px-6 py-3 text-sm text-amber-800 text-center">
+          老師確認後將自動進入第 {completedStage} 關
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -52,7 +69,7 @@ function Stage1({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
               <input type="radio" name="style" checked={style === k} onChange={() => setStyle(k)} className="mt-1 accent-amber-600" />
               <div>
                 <div className="font-medium text-amber-900">{GAME_CONFIG.styles[k].label}</div>
-                <div className="text-xs text-gray-500">租金 ${GAME_CONFIG.styles[k].rent.toLocaleString()} | 基礎客流 {GAME_CONFIG.styles[k].base_traffic.toLocaleString()}</div>
+                <div className="text-xs text-amber-700">租金 ${GAME_CONFIG.styles[k].rent.toLocaleString()} | 基礎客流 {GAME_CONFIG.styles[k].base_traffic.toLocaleString()}</div>
               </div>
             </label>
           ))}
@@ -66,7 +83,7 @@ function Stage1({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
             <label key={k} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${bean === k ? "border-amber-500 bg-amber-50" : "border-gray-200 hover:border-amber-300"}`}>
               <input type="radio" name="bean" checked={bean === k} onChange={() => setBean(k)} className="accent-amber-600" />
               <span className="font-medium text-amber-900">{k}</span>
-              <span className="ml-auto text-sm text-gray-500">${GAME_CONFIG.beans[k]}/杯</span>
+              <span className="ml-auto text-sm text-amber-700">${GAME_CONFIG.beans[k]}/杯</span>
             </label>
           ))}
         </div>
@@ -79,13 +96,13 @@ function Stage1({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
             <label key={k} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${milk === k ? "border-amber-500 bg-amber-50" : "border-gray-200 hover:border-amber-300"}`}>
               <input type="radio" name="milk" checked={milk === k} onChange={() => setMilk(k)} className="accent-amber-600" />
               <span className="font-medium text-amber-900">{k}</span>
-              <span className="ml-auto text-sm text-gray-500">{GAME_CONFIG.milks[k] === 0 ? "免費" : `$${GAME_CONFIG.milks[k]}/杯`}</span>
+              <span className="ml-auto text-sm text-amber-700">{GAME_CONFIG.milks[k] === 0 ? "免費" : `$${GAME_CONFIG.milks[k]}/杯`}</span>
             </label>
           ))}
         </div>
       </div>
 
-      <div className="bg-amber-50 rounded-xl p-3 mb-4 text-sm text-center">
+      <div className="bg-amber-100 rounded-xl p-3 mb-4 text-sm text-center text-amber-800">
         預估每杯直接成本：<span className="font-bold text-amber-900">${GAME_CONFIG.beans[bean] + GAME_CONFIG.milks[milk] + GAME_CONFIG.material}</span>
       </div>
 
@@ -118,7 +135,7 @@ function Stage2({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
   return (
     <Card>
       <SectionTitle>第二關：成本估算 💰</SectionTitle>
-      <div className="bg-blue-50 rounded-xl p-3 mb-4 text-sm">
+      <div className="bg-blue-100 rounded-xl p-3 mb-4 text-sm text-blue-900 font-medium">
         已鎖定：<span className="font-bold">{styleCfg.label}</span>
       </div>
 
@@ -142,7 +159,7 @@ function Stage2({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
             onChange={(e) => set(Number(e.target.value))}
             className="w-full accent-amber-600"
           />
-          <div className="flex justify-between text-xs text-gray-400">
+          <div className="flex justify-between text-xs text-amber-600">
             <span>$0</span><span>$100,000</span>
           </div>
         </div>
@@ -192,9 +209,6 @@ function Stage3({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
   function handleP2() {
     if (!finalPrice) return;
     const res = calcResult()!;
-    const maxX = Math.max(5000, Math.round(res.bep * 1.5));
-    const s3_profit = res.profit;
-    const initialCapital = Math.max(30000, s3_profit);
     onSave({
       final_price: finalPrice,
       ai_predicted_sales: res.ai_sales,
@@ -223,7 +237,6 @@ function Stage3({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
     });
   }
 
-  // chart data
   const bepVal = data.bep ?? 0;
   const maxX = Math.max(5000, Math.round(bepVal * 1.5));
   const chartData = Array.from({ length: 51 }, (_, i) => {
@@ -244,6 +257,9 @@ function Stage3({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
             </div>
             <input type="range" min={100} max={10000} step={100} value={salesForecast}
               onChange={(e) => setSalesForecast(Number(e.target.value))} className="w-full accent-amber-600" />
+            <div className="flex justify-between text-xs text-amber-600">
+              <span>100 杯</span><span>10,000 杯</span>
+            </div>
           </div>
           <div className="mb-6">
             <div className="flex justify-between items-center mb-1">
@@ -252,8 +268,11 @@ function Stage3({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
             </div>
             <input type="range" min={0} max={200} step={5} value={margin}
               onChange={(e) => setMargin(Number(e.target.value))} className="w-full accent-amber-600" />
+            <div className="flex justify-between text-xs text-amber-600">
+              <span>0%</span><span>200%</span>
+            </div>
           </div>
-          <div className="bg-amber-50 rounded-xl p-4 text-center mb-6">
+          <div className="bg-amber-100 rounded-xl p-4 text-center mb-6">
             <div className="text-amber-700 text-sm">系統建議售價</div>
             <div className="text-3xl font-bold text-amber-900">${suggested}</div>
           </div>
@@ -270,8 +289,8 @@ function Stage3({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
             <Stat label="分攤固定" value={`$${Math.round(fc / salesForecast)}`} />
             <Stat label="每杯總成本" value={`$${Math.round(dc + fc / salesForecast)}`} />
           </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center mb-4">
-            <div className="text-blue-700 text-sm">系統建議售價</div>
+          <div className="bg-blue-100 border border-blue-300 rounded-xl p-3 text-center mb-4">
+            <div className="text-blue-800 text-sm">系統建議售價</div>
             <div className="text-2xl font-bold text-blue-900">${data.suggested_price ?? suggested}</div>
           </div>
           <div className="mb-4">
@@ -280,7 +299,7 @@ function Stage3({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
               <input
                 type="number" min={1} value={finalPrice ?? ""}
                 onChange={(e) => setFinalPrice(Number(e.target.value))}
-                className="flex-1 border-2 border-amber-300 rounded-xl px-4 py-3 text-xl font-bold text-center focus:outline-none focus:border-amber-500"
+                className="flex-1 border-2 border-amber-300 rounded-xl px-4 py-3 text-xl font-bold text-amber-900 text-center focus:outline-none focus:border-amber-500"
               />
               <span className="text-lg text-amber-700">元</span>
             </div>
@@ -347,6 +366,12 @@ function Stage4({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
   const debt = data.debt ?? 0;
   const [choice, setChoice] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Reset local state when month advances (fixes bug where saving stays true after Firebase update)
+  useEffect(() => {
+    setChoice("");
+    setSaving(false);
+  }, [month]);
 
   // Loan shark
   useEffect(() => {
@@ -457,7 +482,7 @@ function Stage4({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
       </div>
 
       <div className="mb-2">
-        <div className="flex justify-between text-xs text-amber-600 mb-1">
+        <div className="flex justify-between text-xs text-amber-700 mb-1">
           <span>月份進度</span><span>M{month - 1} / 3</span>
         </div>
         <div className="w-full bg-amber-100 rounded-full h-2">
@@ -467,7 +492,7 @@ function Stage4({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
 
       <div className="my-4 border-t pt-4">
         <p className="font-bold text-amber-800 mb-1">{cfg.title}</p>
-        <div className={`rounded-xl p-3 mb-4 text-sm ${month === 1 ? "bg-red-50 text-red-700" : month === 2 ? "bg-yellow-50 text-yellow-700" : "bg-red-50 text-red-700"}`}>
+        <div className={`rounded-xl p-3 mb-4 text-sm font-medium ${month === 1 ? "bg-red-50 text-red-800" : month === 2 ? "bg-yellow-50 text-yellow-800" : "bg-red-50 text-red-800"}`}>
           {cfg.event}
         </div>
 
@@ -477,7 +502,7 @@ function Stage4({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
               <input type="radio" name={`m${month}`} checked={choice === opt} onChange={() => setChoice(opt)} className="mt-1 accent-amber-600" />
               <div>
                 <div className="font-medium text-amber-900">{opt}</div>
-                <div className="text-xs text-gray-500">{cfg.captions[i]}</div>
+                <div className="text-xs text-amber-700 mt-0.5">{cfg.captions[i]}</div>
               </div>
             </label>
           ))}
@@ -532,22 +557,22 @@ function FinalReport({ data }: { data: TeamData }) {
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="bg-amber-50 text-amber-800">
+            <tr className="bg-amber-100 text-amber-900">
               {["月份", "事件", "銷量", "營收", "成本", "損益", "資金"].map((h) => (
-                <th key={h} className="py-2 px-2 text-left">{h}</th>
+                <th key={h} className="py-2 px-2 text-left font-semibold">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {history.map((h) => (
-              <tr key={h.Month} className="border-b border-amber-50">
-                <td className="py-1.5 px-2 font-bold">{h.Month}</td>
-                <td className="py-1.5 px-2 text-gray-600 max-w-[80px] truncate">{h.Event}</td>
-                <td className="py-1.5 px-2">{h.Sales.toLocaleString()}</td>
-                <td className="py-1.5 px-2">${h.Revenue.toLocaleString()}</td>
-                <td className="py-1.5 px-2">${h.Cost.toLocaleString()}</td>
-                <td className={`py-1.5 px-2 font-bold ${h.Profit >= 0 ? "text-green-600" : "text-red-600"}`}>${h.Profit.toLocaleString()}</td>
-                <td className="py-1.5 px-2">${h.Capital.toLocaleString()}</td>
+              <tr key={h.Month} className="border-b border-amber-100">
+                <td className="py-1.5 px-2 font-bold text-amber-900">{h.Month}</td>
+                <td className="py-1.5 px-2 text-amber-800 max-w-[80px] truncate">{h.Event}</td>
+                <td className="py-1.5 px-2 text-amber-900">{h.Sales.toLocaleString()}</td>
+                <td className="py-1.5 px-2 text-amber-900">${h.Revenue.toLocaleString()}</td>
+                <td className="py-1.5 px-2 text-amber-900">${h.Cost.toLocaleString()}</td>
+                <td className={`py-1.5 px-2 font-bold ${h.Profit >= 0 ? "text-green-700" : "text-red-600"}`}>${h.Profit.toLocaleString()}</td>
+                <td className="py-1.5 px-2 font-medium text-amber-900">${h.Capital.toLocaleString()}</td>
               </tr>
             ))}
           </tbody>
@@ -555,7 +580,7 @@ function FinalReport({ data }: { data: TeamData }) {
       </div>
 
       {finalDebt > 0 && (
-        <div className="mt-3 bg-yellow-50 rounded-xl p-3 text-sm text-yellow-700">
+        <div className="mt-3 bg-yellow-50 rounded-xl p-3 text-sm text-yellow-800">
           ⚠️ 注意：你仍欠地下錢莊 ${finalDebt.toLocaleString()}，上述資金尚未扣除此負債。
         </div>
       )}
@@ -567,6 +592,7 @@ function FinalReport({ data }: { data: TeamData }) {
 export default function PlayPage() {
   const { sessionId, teamId } = useParams<{ sessionId: string; teamId: string }>();
   const [teamData, setTeamData] = useState<TeamData | null>(null);
+  const [unlockedStage, setUnlockedStage] = useState<number>(1);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -578,6 +604,14 @@ export default function PlayPage() {
     return () => off(teamRef, "value", handler);
   }, [sessionId, teamId]);
 
+  useEffect(() => {
+    const unlockedRef = ref(db, `sessions/${sessionId}/unlockedStage`);
+    const handler = onValue(unlockedRef, (snap) => {
+      setUnlockedStage(snap.val() ?? 1);
+    });
+    return () => off(unlockedRef, "value", handler);
+  }, [sessionId]);
+
   const saveData = useCallback(async (partial: Partial<TeamData>) => {
     const teamRef = ref(db, `sessions/${sessionId}/teams/${teamId}`);
     const current = (await get(teamRef)).val() as TeamData;
@@ -588,6 +622,7 @@ export default function PlayPage() {
   if (!teamData) return <div className="min-h-screen flex items-center justify-center text-red-600">找不到資料</div>;
 
   const stage = teamData.currentStage;
+  const isWaiting = stage > unlockedStage;
 
   return (
     <div className="min-h-screen pb-12">
@@ -605,11 +640,17 @@ export default function PlayPage() {
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-6">
-        {stage === 1 && <Stage1 data={teamData} onSave={saveData} />}
-        {stage === 2 && <Stage2 data={teamData} onSave={saveData} />}
-        {stage === 3 && <Stage3 data={teamData} onSave={saveData} />}
-        {stage === 4 && <Stage4 data={teamData} onSave={saveData} />}
-        {stage >= 5 && <FinalReport data={teamData} />}
+        {isWaiting ? (
+          <WaitingScreen completedStage={stage} />
+        ) : (
+          <>
+            {stage === 1 && <Stage1 data={teamData} onSave={saveData} />}
+            {stage === 2 && <Stage2 data={teamData} onSave={saveData} />}
+            {stage === 3 && <Stage3 data={teamData} onSave={saveData} />}
+            {stage === 4 && <Stage4 data={teamData} onSave={saveData} />}
+            {stage >= 5 && <FinalReport data={teamData} />}
+          </>
+        )}
       </div>
     </div>
   );
