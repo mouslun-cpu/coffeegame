@@ -67,6 +67,93 @@ function PnLTooltip({ active, payload, label }: { active?: boolean; payload?: an
   );
 }
 
+function SalesTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-amber-200 rounded-xl p-3 shadow text-xs max-w-[200px]">
+      <div className="font-bold text-amber-900 mb-2">{label}</div>
+      {payload.map((p: any) => (
+        <div key={p.name} className="mb-1.5">
+          <div className="flex items-center gap-1">
+            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.color }} />
+            <span className="font-medium truncate">{p.name}：</span>
+            <span>{Number(p.value).toLocaleString()} 杯</span>
+          </div>
+          {p.payload[`${p.name}_ev`] && (
+            <div className="ml-3.5 text-gray-500 text-[10px] truncate">{p.payload[`${p.name}_ev`]}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TeamDetailModal({ team, onClose }: { team: TeamData & { id: string }; onClose: () => void }) {
+  const history = team.history ?? [];
+  const finalCapital = team.capital ?? 0;
+  const finalDebt = team.debt ?? 0;
+  const net = finalCapital - finalDebt;
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-white rounded-t-2xl border-b border-amber-100 px-6 py-4 flex items-center justify-between">
+          <h2 className="font-bold text-amber-900 text-lg">{team.name} — 完整對戰紀錄</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-3xl font-light leading-none">×</button>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="bg-amber-50 rounded-xl p-3 text-center">
+              <div className="text-xs text-amber-700">最終資金</div>
+              <div className={`font-bold text-lg mt-0.5 ${finalCapital < 30000 ? "text-red-600" : "text-amber-900"}`}>${finalCapital.toLocaleString()}</div>
+            </div>
+            <div className="bg-amber-50 rounded-xl p-3 text-center">
+              <div className="text-xs text-amber-700">累積負債</div>
+              <div className={`font-bold text-lg mt-0.5 ${finalDebt > 0 ? "text-red-600" : "text-gray-500"}`}>${finalDebt.toLocaleString()}</div>
+            </div>
+            <div className="bg-amber-50 rounded-xl p-3 text-center">
+              <div className="text-xs text-amber-700">淨資產</div>
+              <div className={`font-bold text-lg mt-0.5 ${net >= 0 ? "text-green-700" : "text-red-600"}`}>${net.toLocaleString()}</div>
+            </div>
+          </div>
+          {history.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-amber-100 text-amber-900">
+                    {["月份", "事件", "銷量", "營收", "成本", "損益", "資金"].map((h) => (
+                      <th key={h} className="py-2 px-2 text-left font-semibold">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((h) => (
+                    <tr key={h.Month} className="border-b border-amber-100 hover:bg-amber-50/50">
+                      <td className="py-1.5 px-2 font-bold text-amber-900">{h.Month}</td>
+                      <td className="py-1.5 px-2 text-amber-800">{h.Event}</td>
+                      <td className="py-1.5 px-2 text-amber-900">{h.Sales.toLocaleString()}</td>
+                      <td className="py-1.5 px-2 text-amber-900">${h.Revenue.toLocaleString()}</td>
+                      <td className="py-1.5 px-2 text-amber-900">${h.Cost.toLocaleString()}</td>
+                      <td className={`py-1.5 px-2 font-bold ${h.Profit >= 0 ? "text-green-700" : "text-red-600"}`}>
+                        {h.Profit >= 0 ? "+" : ""}${h.Profit.toLocaleString()}
+                      </td>
+                      <td className={`py-1.5 px-2 font-medium ${h.Capital < 30000 ? "text-red-600" : "text-amber-900"}`}>${h.Capital.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-center text-amber-500 py-6">尚未進入生存戰</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function stageColor(stage: number) {
   if (stage <= 1) return "bg-gray-100 text-gray-700";
   if (stage === 2) return "bg-blue-100 text-blue-800";
@@ -170,6 +257,7 @@ export default function TeacherPage() {
   const [unlockedMonth, setUnlockedMonth] = useState<number>(1);
   const [joinUrl, setJoinUrl] = useState("");
   const [creating, setCreating] = useState(false);
+  const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
 
   async function createSession() {
     setCreating(true);
@@ -258,6 +346,20 @@ export default function TeacherPage() {
       teamsWithHistory.forEach((team) => {
         const entry = team.history!.find((h) => h.Month === month);
         if (entry != null) point[team.name] = entry.Profit;
+      });
+      return point;
+    })
+    .filter((p) => Object.keys(p).length > 1);
+
+  const salesChartData = allMonths
+    .map((month) => {
+      const point: Record<string, string | number | undefined> = { month };
+      teamsWithHistory.forEach((team) => {
+        const entry = team.history!.find((h) => h.Month === month);
+        if (entry != null) {
+          point[team.name] = entry.Sales;
+          point[`${team.name}_ev`] = entry.Event;
+        }
       });
       return point;
     })
@@ -502,6 +604,40 @@ export default function TeacherPage() {
               </div>
             </div>
 
+            {/* Sales Chart */}
+            {salesChartData.length > 0 && (
+              <div className="mt-6 bg-white rounded-2xl shadow p-6">
+                <h2 className="font-bold text-amber-900 text-xl mb-1">☕ 銷量變化（Hover 看決策）</h2>
+                <p className="text-sm text-amber-700 mb-4">各組每月實際銷量，反映定價與市場事件的影響</p>
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={salesChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#fde68a" />
+                      <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#92400e" }} />
+                      <YAxis
+                        tickFormatter={(v) => `${(v / 1000).toFixed(1)}k`}
+                        tick={{ fontSize: 11, fill: "#92400e" }}
+                      />
+                      <Tooltip content={<SalesTooltip />} />
+                      <Legend />
+                      {teamsWithHistory.map((team, i) => (
+                        <Line
+                          key={team.id}
+                          type="monotone"
+                          dataKey={team.name}
+                          stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                          strokeWidth={2.5}
+                          dot={{ r: 5 }}
+                          activeDot={{ r: 7 }}
+                          connectNulls={false}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
             {/* Event Log */}
             {eventLog.length > 0 && (
               <div className="mt-6 bg-white rounded-2xl shadow p-6">
@@ -541,9 +677,9 @@ export default function TeacherPage() {
         )}
 
         {/* Leaderboard */}
-        {teamList.some((t) => t.capital != null) && (
+        {teamList.length > 0 && (
           <div className="mt-8 bg-white rounded-2xl shadow p-6">
-            <h2 className="font-bold text-amber-900 text-xl mb-4">🏆 即時排行榜（依淨資產）</h2>
+            <h2 className="font-bold text-amber-900 text-xl mb-4">🏆 即時排行榜（全班）</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -554,36 +690,54 @@ export default function TeacherPage() {
                     <th className="text-left py-2 px-3">風格</th>
                     <th className="text-right py-2 px-3">資金</th>
                     <th className="text-right py-2 px-3">負債</th>
-                    <th className="text-right py-2 px-3 rounded-r-lg">淨資產</th>
+                    <th className="text-right py-2 px-3">淨資產</th>
+                    <th className="text-center py-2 px-3 rounded-r-lg">詳情</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {teamList
-                    .filter((t) => t.capital != null)
-                    .sort((a, b) => (b.capital! - (b.debt ?? 0)) - (a.capital! - (a.debt ?? 0)))
+                  {[...teamList]
+                    .sort((a, b) => {
+                      if (a.capital == null && b.capital == null) return 0;
+                      if (a.capital == null) return 1;
+                      if (b.capital == null) return -1;
+                      return (b.capital - (b.debt ?? 0)) - (a.capital - (a.debt ?? 0));
+                    })
                     .map((team, i) => {
-                      const net = team.capital! - (team.debt ?? 0);
+                      const hasCapital = team.capital != null;
+                      const net = hasCapital ? team.capital! - (team.debt ?? 0) : null;
                       const isWaiting = team.currentStage > unlockedStage;
                       return (
                         <tr key={team.id} className="border-b border-amber-50 hover:bg-amber-50/50">
                           <td className="py-2 px-3 font-bold text-amber-700">
-                            {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
+                            {!hasCapital ? "—" : i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
                           </td>
                           <td className="py-2 px-3 font-medium text-amber-900">
                             {team.name}
                             {(team.debt ?? 0) > 0 && <span className="ml-1 text-red-600 text-xs">🦈</span>}
                           </td>
                           <td className="py-2 px-3">
-                            {isWaiting
-                              ? <span className="text-xs text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full">⏳ 等待放行</span>
-                              : <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">▶ 進行中</span>
+                            {team.currentStage >= 5
+                              ? <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✅ 已完賽</span>
+                              : isWaiting
+                                ? <span className="text-xs text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full">⏳ 等待放行</span>
+                                : hasCapital
+                                  ? <span className="text-xs text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full">🔥 生存戰</span>
+                                  : <span className="text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">📝 備戰中</span>
                             }
                           </td>
                           <td className="py-2 px-3 text-amber-800">{team.style ? GAME_CONFIG.styles[team.style].label.split(" ")[0] : "—"}</td>
-                          <td className="py-2 px-3 text-right text-amber-900">${team.capital!.toLocaleString()}</td>
-                          <td className="py-2 px-3 text-right text-red-600">${(team.debt ?? 0).toLocaleString()}</td>
-                          <td className={`py-2 px-3 text-right font-bold ${net >= 0 ? "text-green-700" : "text-red-600"}`}>
-                            ${net.toLocaleString()}
+                          <td className="py-2 px-3 text-right text-amber-900">{hasCapital ? `$${team.capital!.toLocaleString()}` : "—"}</td>
+                          <td className="py-2 px-3 text-right text-red-600">{hasCapital ? `$${(team.debt ?? 0).toLocaleString()}` : "—"}</td>
+                          <td className={`py-2 px-3 text-right font-bold ${net == null ? "text-gray-400" : net >= 0 ? "text-green-700" : "text-red-600"}`}>
+                            {net == null ? "—" : `$${net.toLocaleString()}`}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <button
+                              onClick={() => setExpandedTeamId(team.id)}
+                              className="text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 font-medium px-3 py-1 rounded-lg transition"
+                            >
+                              展開
+                            </button>
                           </td>
                         </tr>
                       );
@@ -593,6 +747,12 @@ export default function TeacherPage() {
             </div>
           </div>
         )}
+
+        {/* Team Detail Modal */}
+        {expandedTeamId && (() => {
+          const team = teamList.find((t) => t.id === expandedTeamId);
+          return team ? <TeamDetailModal team={team} onClose={() => setExpandedTeamId(null)} /> : null;
+        })()}
       </div>
     </div>
   );
