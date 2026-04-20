@@ -93,6 +93,7 @@ function TeamDetailModal({ team, onClose }: { team: TeamData & { id: string }; o
   const finalCapital = team.capital ?? 0;
   const finalDebt = team.debt ?? 0;
   const net = finalCapital - finalDebt;
+  const memberList = Object.values(team.members ?? {});
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
@@ -104,6 +105,29 @@ function TeamDetailModal({ team, onClose }: { team: TeamData & { id: string }; o
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-3xl font-light leading-none">×</button>
         </div>
         <div className="p-6">
+          {/* Team composition */}
+          {(team.bossName || memberList.length > 0) && (
+            <div className="bg-amber-50 rounded-xl p-4 mb-5 flex flex-wrap gap-3">
+              {team.bossName && (
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">👨‍💼</span>
+                  <div>
+                    <div className="text-xs text-amber-600">老闆</div>
+                    <div className="font-bold text-amber-900">{team.bossName}</div>
+                  </div>
+                </div>
+              )}
+              {memberList.map((m, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-lg">🧑‍🎓</span>
+                  <div>
+                    <div className="text-xs text-amber-600">合夥人</div>
+                    <div className="font-medium text-amber-900">{m.name}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-3 mb-5">
             <div className="bg-amber-50 rounded-xl p-3 text-center">
               <div className="text-xs text-amber-700">最終資金</div>
@@ -152,6 +176,59 @@ function TeamDetailModal({ team, onClose }: { team: TeamData & { id: string }; o
       </div>
     </div>
   );
+}
+
+function exportCSV(teamList: (TeamData & { id: string })[], sessionId: string) {
+  const sorted = [...teamList].sort((a, b) => {
+    if (a.capital == null && b.capital == null) return 0;
+    if (a.capital == null) return 1;
+    if (b.capital == null) return -1;
+    return (b.capital - (b.debt ?? 0)) - (a.capital - (a.debt ?? 0));
+  });
+
+  const headers = [
+    "排名", "咖啡廳名稱", "老闆", "合夥人",
+    "風格", "咖啡豆", "乳品", "售價", "直接成本", "固定成本", "AI預測銷量",
+    "M1決策", "M1損益", "M2決策", "M2損益", "M3決策", "M3損益",
+    "最終資金", "負債", "淨資產", "狀態",
+  ];
+
+  const rows = sorted.map((team, i) => {
+    const net = team.capital != null ? team.capital - (team.debt ?? 0) : "";
+    const members = Object.values(team.members ?? {}).map((m) => m.name).join("／");
+    const getHistory = (month: string) => team.history?.find((h) => h.Month === month);
+    const m1 = getHistory("M1"); const m2 = getHistory("M2"); const m3 = getHistory("M3");
+    const rankLabel = team.capital == null ? "—" : i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
+    return [
+      rankLabel,
+      team.name,
+      team.bossName ?? "",
+      members,
+      team.style ?? "",
+      team.bean ?? "",
+      team.milk ?? "",
+      team.final_price ?? "",
+      team.direct_cost ?? "",
+      team.total_indirect_cost ?? "",
+      team.ai_predicted_sales ?? "",
+      m1?.Event ?? "", m1?.Profit ?? "",
+      m2?.Event ?? "", m2?.Profit ?? "",
+      m3?.Event ?? "", m3?.Profit ?? "",
+      team.capital ?? "",
+      team.debt ?? 0,
+      net,
+      team.currentStage >= 5 ? "已完賽" : team.status === "lobby" ? "大廳中" : "進行中",
+    ].map((v) => `"${String(v).replace(/"/g, '""')}"`);
+  });
+
+  const csv = [headers.map((h) => `"${h}"`), ...rows].map((r) => r.join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `coffeegame_${sessionId}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function stageColor(stage: number) {
@@ -493,18 +570,33 @@ export default function TeacherPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* QR Code Panel */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow p-6 flex flex-col items-center gap-4 sticky top-4">
-              <h2 className="font-bold text-amber-900 text-lg">📱 學生掃碼加入</h2>
-              <div className="bg-white p-3 rounded-xl border-2 border-amber-200">
-                <QRCodeSVG value={joinUrl} size={180} bgColor="#ffffff" fgColor="#78350f" />
+            <div className="bg-white rounded-2xl shadow p-5 flex flex-col items-center gap-4 sticky top-4">
+              {/* Boss QR */}
+              <div className="w-full flex flex-col items-center gap-2 pb-4 border-b border-amber-100">
+                <div className="text-sm font-bold text-amber-900">👨‍💼 我要當老闆</div>
+                <div className="bg-white p-2 rounded-xl border-2 border-amber-400">
+                  <QRCodeSVG value={`${joinUrl}/boss`} size={140} bgColor="#ffffff" fgColor="#92400e" />
+                </div>
+                <button
+                  onClick={() => navigator.clipboard.writeText(`${joinUrl}/boss`)}
+                  className="w-full text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 font-medium py-1.5 rounded-lg transition"
+                >
+                  複製老闆連結
+                </button>
               </div>
-              <p className="text-xs text-center text-amber-700 break-all">{joinUrl}</p>
-              <button
-                onClick={() => navigator.clipboard.writeText(joinUrl)}
-                className="w-full text-sm bg-amber-100 hover:bg-amber-200 text-amber-800 font-medium py-2 rounded-xl transition"
-              >
-                複製連結
-              </button>
+              {/* Partner QR */}
+              <div className="w-full flex flex-col items-center gap-2 pb-4 border-b border-amber-100">
+                <div className="text-sm font-bold text-green-800">🧑‍🎓 我是合夥人</div>
+                <div className="bg-white p-2 rounded-xl border-2 border-green-400">
+                  <QRCodeSVG value={`${joinUrl}/partner`} size={140} bgColor="#ffffff" fgColor="#166534" />
+                </div>
+                <button
+                  onClick={() => navigator.clipboard.writeText(`${joinUrl}/partner`)}
+                  className="w-full text-xs bg-green-100 hover:bg-green-200 text-green-800 font-medium py-1.5 rounded-lg transition"
+                >
+                  複製合夥人連結
+                </button>
+              </div>
               <button
                 onClick={createSession}
                 className="w-full text-sm bg-red-50 hover:bg-red-100 text-red-600 font-medium py-2 rounded-xl transition"
@@ -679,13 +771,21 @@ export default function TeacherPage() {
         {/* Leaderboard */}
         {teamList.length > 0 && (
           <div className="mt-8 bg-white rounded-2xl shadow p-6">
-            <h2 className="font-bold text-amber-900 text-xl mb-4">🏆 即時排行榜（全班）</h2>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <h2 className="font-bold text-amber-900 text-xl">🏆 即時排行榜（全班）</h2>
+              <button
+                onClick={() => exportCSV(teamList, sessionId!)}
+                className="bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium px-4 py-2 rounded-xl transition flex items-center gap-2"
+              >
+                📥 匯出成績 CSV
+              </button>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-amber-100 text-amber-900">
                     <th className="text-left py-2 px-3 rounded-l-lg">排名</th>
-                    <th className="text-left py-2 px-3">咖啡廳名稱</th>
+                    <th className="text-left py-2 px-3">咖啡廳 / 成員</th>
                     <th className="text-left py-2 px-3">狀態</th>
                     <th className="text-left py-2 px-3">風格</th>
                     <th className="text-right py-2 px-3">資金</th>
@@ -711,9 +811,21 @@ export default function TeacherPage() {
                           <td className="py-2 px-3 font-bold text-amber-700">
                             {!hasCapital ? "—" : i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
                           </td>
-                          <td className="py-2 px-3 font-medium text-amber-900">
-                            {team.name}
-                            {(team.debt ?? 0) > 0 && <span className="ml-1 text-red-600 text-xs">🦈</span>}
+                          <td className="py-2 px-3">
+                            <div className="font-medium text-amber-900">
+                              {team.name}
+                              {(team.debt ?? 0) > 0 && <span className="ml-1 text-red-600 text-xs">🦈</span>}
+                            </div>
+                            {team.bossName && (
+                              <div className="text-xs text-amber-600 mt-0.5">
+                                👨‍💼 {team.bossName}
+                                {Object.values(team.members ?? {}).length > 0 && (
+                                  <span className="ml-1">
+                                    · 🧑‍🎓 {Object.values(team.members!).map((m) => m.name).join("、")}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="py-2 px-3">
                             {team.currentStage >= 5

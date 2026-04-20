@@ -39,8 +39,16 @@ export interface HistoryEntry {
   Capital: number;
 }
 
+export interface TeamMember {
+  name: string;
+  joinedAt: number;
+}
+
 export interface TeamData {
   name: string;
+  bossName?: string;
+  members?: Record<string, TeamMember>;
+  status?: 'lobby' | 'active';
   currentStage: number;
   style?: StyleKey;
   bean?: BeanKey;
