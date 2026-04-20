@@ -360,7 +360,7 @@ function Stage3({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
 }
 
 // ─── Stage 4 ────────────────────────────────────────────────────────────────
-function Stage4({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData>) => void }) {
+function Stage4({ data, onSave, unlockedMonth }: { data: TeamData; onSave: (d: Partial<TeamData>) => void; unlockedMonth: number }) {
   const month = data.s4_month!;
   const capital = data.capital!;
   const debt = data.debt ?? 0;
@@ -403,6 +403,27 @@ function Stage4({ data, onSave }: { data: TeamData; onSave: (d: Partial<TeamData
   };
 
   if (month > 3) return <FinalReport data={data} />;
+
+  if (month > unlockedMonth) {
+    return (
+      <Card>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <Stat label="💰 目前資金" value={`$${capital.toLocaleString()}`} red={capital < 30000} />
+          <Stat label="💀 累積負債" value={`$${debt.toLocaleString()}`} red={debt > 0} sub={debt > 0 ? "+10% 月利" : undefined} />
+        </div>
+        <div className="flex flex-col items-center py-6 gap-4">
+          <div className="text-5xl animate-pulse">⏳</div>
+          <div className="text-center">
+            <div className="text-xl font-bold text-amber-900 mb-1">M{month - 1} 決策已提交！</div>
+            <div className="text-amber-700">等待老師開放 M{month}…</div>
+          </div>
+          <div className="bg-amber-50 rounded-xl px-6 py-3 text-sm text-amber-800 text-center">
+            老師確認後將自動進入 M{month}
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   const cfg = options[month];
 
@@ -593,6 +614,7 @@ export default function PlayPage() {
   const { sessionId, teamId } = useParams<{ sessionId: string; teamId: string }>();
   const [teamData, setTeamData] = useState<TeamData | null>(null);
   const [unlockedStage, setUnlockedStage] = useState<number>(1);
+  const [unlockedMonth, setUnlockedMonth] = useState<number>(1);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -610,6 +632,14 @@ export default function PlayPage() {
       setUnlockedStage(snap.val() ?? 1);
     });
     return () => off(unlockedRef, "value", handler);
+  }, [sessionId]);
+
+  useEffect(() => {
+    const unlockedMonthRef = ref(db, `sessions/${sessionId}/unlockedMonth`);
+    const handler = onValue(unlockedMonthRef, (snap) => {
+      setUnlockedMonth(snap.val() ?? 1);
+    });
+    return () => off(unlockedMonthRef, "value", handler);
   }, [sessionId]);
 
   const saveData = useCallback(async (partial: Partial<TeamData>) => {
@@ -647,7 +677,7 @@ export default function PlayPage() {
             {stage === 1 && <Stage1 data={teamData} onSave={saveData} />}
             {stage === 2 && <Stage2 data={teamData} onSave={saveData} />}
             {stage === 3 && <Stage3 data={teamData} onSave={saveData} />}
-            {stage === 4 && <Stage4 data={teamData} onSave={saveData} />}
+            {stage === 4 && <Stage4 data={teamData} onSave={saveData} unlockedMonth={unlockedMonth} />}
             {stage >= 5 && <FinalReport data={teamData} />}
           </>
         )}

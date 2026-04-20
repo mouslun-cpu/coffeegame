@@ -40,7 +40,7 @@ export default function JoinSessionPage() {
       <div className="text-center">
         <div className="text-6xl mb-4">☕</div>
         <h1 className="text-3xl font-bold text-amber-900">咖啡廳老闆就是你！</h1>
-        <p className="text-amber-600 mt-1">場次：<code className="bg-amber-100 px-2 py-0.5 rounded text-xs">{sessionId}</code></p>
+        <p className="text-amber-600 mt-1">請輸入你的咖啡廳名稱來加入</p>
       </div>
       <div className="w-full max-w-sm flex flex-col gap-3">
         <input

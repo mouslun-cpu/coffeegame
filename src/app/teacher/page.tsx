@@ -5,7 +5,7 @@ import { ref, push, set, onValue, off } from "firebase/database";
 import { Session, TeamData, GAME_CONFIG } from "@/lib/gameConfig";
 import { QRCodeSVG } from "qrcode.react";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 
 const STAGE_LABELS: Record<number, string> = {
@@ -25,6 +25,47 @@ const CHART_COLORS = [
   "#db2777", "#0891b2", "#65a30d", "#ea580c", "#6366f1",
   "#92400e", "#1e40af", "#166534", "#9f1239", "#4c1d95",
 ];
+
+function CapitalTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-amber-200 rounded-xl p-3 shadow text-xs max-w-[200px]">
+      <div className="font-bold text-amber-900 mb-2">{label}</div>
+      {payload.map((p: any) => (
+        <div key={p.name} className="mb-1.5">
+          <div className="flex items-center gap-1">
+            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.color }} />
+            <span className="font-medium truncate">{p.name}：</span>
+            <span>${Number(p.value).toLocaleString()}</span>
+          </div>
+          {p.payload[`${p.name}_ev`] && (
+            <div className="ml-3.5 text-gray-500 text-[10px] truncate">{p.payload[`${p.name}_ev`]}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PnLTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-amber-200 rounded-xl p-3 shadow text-xs max-w-[200px]">
+      <div className="font-bold text-amber-900 mb-2">{label}</div>
+      {payload.map((p: any) => (
+        <div key={p.name} className="mb-1 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.color }} />
+            <span className="truncate">{p.name}</span>
+          </div>
+          <span className={`font-bold ${Number(p.value) >= 0 ? "text-green-700" : "text-red-600"}`}>
+            {Number(p.value) >= 0 ? "+" : ""}${Number(p.value).toLocaleString()}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function stageColor(stage: number) {
   if (stage <= 1) return "bg-gray-100 text-gray-700";
@@ -126,6 +167,7 @@ export default function TeacherPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [teams, setTeams] = useState<Record<string, TeamData>>({});
   const [unlockedStage, setUnlockedStage] = useState<number>(1);
+  const [unlockedMonth, setUnlockedMonth] = useState<number>(1);
   const [joinUrl, setJoinUrl] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -144,6 +186,15 @@ export default function TeacherPage() {
     if (!sessionId) return;
     const next = Math.min(unlockedStage + 1, 5);
     await set(ref(db, `sessions/${sessionId}/unlockedStage`), next);
+    if (next === 4) {
+      await set(ref(db, `sessions/${sessionId}/unlockedMonth`), 1);
+    }
+  }
+
+  async function advanceMonth() {
+    if (!sessionId) return;
+    const next = Math.min(unlockedMonth + 1, 3);
+    await set(ref(db, `sessions/${sessionId}/unlockedMonth`), next);
   }
 
   useEffect(() => {
@@ -161,9 +212,15 @@ export default function TeacherPage() {
       setUnlockedStage(snap.val() ?? 1);
     });
 
+    const unlockedMonthRef = ref(db, `sessions/${sessionId}/unlockedMonth`);
+    const unlockedMonthHandler = onValue(unlockedMonthRef, (snap) => {
+      setUnlockedMonth(snap.val() ?? 1);
+    });
+
     return () => {
       off(teamsRef, "value", teamsHandler);
       off(unlockedRef, "value", unlockedHandler);
+      off(unlockedMonthRef, "value", unlockedMonthHandler);
     };
   }, [sessionId]);
 
@@ -178,19 +235,42 @@ export default function TeacherPage() {
     waiting: teamList.filter((t) => t.currentStage > unlockedStage).length,
   };
 
-  // Capital curves chart
+  // Survival battle charts
   const teamsWithHistory = teamList.filter((t) => t.history && t.history.length > 0);
   const allMonths = ["M0", "M1", "M2", "M3"];
   const capitalChartData = allMonths
     .map((month) => {
-      const point: Record<string, string | number> = { month };
+      const point: Record<string, string | number | undefined> = { month };
       teamsWithHistory.forEach((team) => {
         const entry = team.history!.find((h) => h.Month === month);
-        if (entry != null) point[team.name] = entry.Capital;
+        if (entry != null) {
+          point[team.name] = entry.Capital;
+          point[`${team.name}_ev`] = entry.Event;
+        }
       });
       return point;
     })
     .filter((p) => Object.keys(p).length > 1);
+
+  const monthlyPnLData = ["M1", "M2", "M3"]
+    .map((month) => {
+      const point: Record<string, string | number> = { month };
+      teamsWithHistory.forEach((team) => {
+        const entry = team.history!.find((h) => h.Month === month);
+        if (entry != null) point[team.name] = entry.Profit;
+      });
+      return point;
+    })
+    .filter((p) => Object.keys(p).length > 1);
+
+  interface EventRow { teamName: string; month: string; event: string; profit: number; capital: number; }
+  const eventLog: EventRow[] = teamsWithHistory
+    .flatMap((team) =>
+      (team.history ?? [])
+        .filter((h) => h.Month !== "M0")
+        .map((h) => ({ teamName: team.name, month: h.Month, event: h.Event, profit: h.Profit, capital: h.Capital }))
+    )
+    .sort((a, b) => b.month.localeCompare(a.month) || b.profit - a.profit);
 
   if (!sessionId) {
     return (
@@ -274,6 +354,40 @@ export default function TeacherPage() {
           </div>
         </div>
 
+        {/* Month Control (survival battle) */}
+        {unlockedStage >= 4 && (
+          <div className="mb-6 bg-white rounded-2xl shadow p-5 border-l-4 border-orange-400">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+              <div>
+                <h2 className="font-bold text-orange-800 text-lg mb-1">🔥 生存戰月份控制</h2>
+                <p className="text-sm text-orange-700">學生提交當月決策後需等待老師開放下一月，可趁機統一講評</p>
+              </div>
+              {unlockedMonth < 3 ? (
+                <button
+                  onClick={advanceMonth}
+                  className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-6 py-3 rounded-xl transition whitespace-nowrap shadow"
+                >
+                  開放 M{unlockedMonth + 1} →
+                </button>
+              ) : (
+                <span className="bg-orange-100 text-orange-800 px-4 py-2 rounded-xl font-medium">✅ 全部月份已開放</span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {[1, 2, 3].map((m) => (
+                <div
+                  key={m}
+                  className={`flex-1 text-center py-1.5 rounded-lg text-xs font-medium transition ${
+                    m <= unlockedMonth ? "bg-orange-100 text-orange-800" : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {m <= unlockedMonth ? "✓" : "🔒"} M{m}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* QR Code Panel */}
           <div className="lg:col-span-1">
@@ -316,43 +430,114 @@ export default function TeacherPage() {
           </div>
         </div>
 
-        {/* Capital Curves Chart */}
+        {/* Survival Battle Charts */}
         {teamsWithHistory.length > 0 && (
-          <div className="mt-8 bg-white rounded-2xl shadow p-6">
-            <h2 className="font-bold text-amber-900 text-xl mb-1">📈 各組資金變化曲線</h2>
-            <p className="text-sm text-amber-700 mb-4">追蹤每組在生存戰各月份的資金走勢</p>
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={capitalChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#fde68a" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#92400e" }} />
-                  <YAxis
-                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                    tick={{ fontSize: 11, fill: "#92400e" }}
-                  />
-                  <Tooltip formatter={(v) => `$${Number(v).toLocaleString()}`} />
-                  <Legend />
-                  <ReferenceLine
-                    y={0}
-                    stroke="#ef4444"
-                    strokeDasharray="4 4"
-                    label={{ value: "破產線", position: "insideLeft", fontSize: 10, fill: "#ef4444" }}
-                  />
-                  {teamsWithHistory.map((team, i) => (
-                    <Line
-                      key={team.id}
-                      type="monotone"
-                      dataKey={team.name}
-                      stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      connectNulls={false}
+          <>
+            {/* Monthly P&L Battle Chart */}
+            {monthlyPnLData.length > 0 && (
+              <div className="mt-8 bg-white rounded-2xl shadow p-6">
+                <h2 className="font-bold text-amber-900 text-xl mb-1">💥 月份損益對決</h2>
+                <p className="text-sm text-amber-700 mb-4">各組每月決策後的損益結果——柱子往下是虧損，往上是獲利</p>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthlyPnLData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#fde68a" />
+                      <XAxis dataKey="month" tick={{ fontSize: 13, fill: "#92400e", fontWeight: 700 }} />
+                      <YAxis
+                        tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                        tick={{ fontSize: 11, fill: "#92400e" }}
+                      />
+                      <Tooltip content={<PnLTooltip />} />
+                      <Legend />
+                      <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
+                      {teamsWithHistory.map((team, i) => (
+                        <Bar
+                          key={team.id}
+                          dataKey={team.name}
+                          fill={CHART_COLORS[i % CHART_COLORS.length]}
+                          radius={[3, 3, 0, 0]}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Capital Trend */}
+            <div className="mt-6 bg-white rounded-2xl shadow p-6">
+              <h2 className="font-bold text-amber-900 text-xl mb-1">📈 資金走勢（Hover 看決策）</h2>
+              <p className="text-sm text-amber-700 mb-4">各組資金軌跡，懸停資料點可查看當月決策</p>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={capitalChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#fde68a" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#92400e" }} />
+                    <YAxis
+                      tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                      tick={{ fontSize: 11, fill: "#92400e" }}
                     />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
+                    <Tooltip content={<CapitalTooltip />} />
+                    <Legend />
+                    <ReferenceLine
+                      y={0}
+                      stroke="#ef4444"
+                      strokeDasharray="4 4"
+                      label={{ value: "破產線", position: "insideLeft", fontSize: 10, fill: "#ef4444" }}
+                    />
+                    {teamsWithHistory.map((team, i) => (
+                      <Line
+                        key={team.id}
+                        type="monotone"
+                        dataKey={team.name}
+                        stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                        strokeWidth={2.5}
+                        dot={{ r: 5 }}
+                        activeDot={{ r: 7 }}
+                        connectNulls={false}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-          </div>
+
+            {/* Event Log */}
+            {eventLog.length > 0 && (
+              <div className="mt-6 bg-white rounded-2xl shadow p-6">
+                <h2 className="font-bold text-amber-900 text-xl mb-1">📋 決策動態紀錄</h2>
+                <p className="text-sm text-amber-700 mb-4">各組每月選擇與損益結果（最新月份優先）</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-orange-50 text-orange-900">
+                        <th className="py-2 px-3 text-left rounded-l-lg">月份</th>
+                        <th className="py-2 px-3 text-left">組別</th>
+                        <th className="py-2 px-3 text-left">決策</th>
+                        <th className="py-2 px-3 text-right">損益</th>
+                        <th className="py-2 px-3 text-right rounded-r-lg">資金</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {eventLog.map((row, i) => (
+                        <tr key={i} className="border-b border-orange-50 hover:bg-orange-50/50">
+                          <td className="py-2 px-3 font-bold text-orange-700">{row.month}</td>
+                          <td className="py-2 px-3 font-medium text-amber-900">{row.teamName}</td>
+                          <td className="py-2 px-3 text-amber-800 max-w-[180px] truncate">{row.event}</td>
+                          <td className={`py-2 px-3 text-right font-bold ${row.profit >= 0 ? "text-green-700" : "text-red-600"}`}>
+                            {row.profit >= 0 ? "+" : ""}${row.profit.toLocaleString()}
+                          </td>
+                          <td className={`py-2 px-3 text-right font-medium ${row.capital < 30000 ? "text-red-600" : "text-amber-900"}`}>
+                            ${row.capital.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Leaderboard */}

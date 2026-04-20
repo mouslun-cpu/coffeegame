@@ -69,4 +69,5 @@ export interface Session {
   status: 'waiting' | 'active' | 'finished';
   teams: Record<string, TeamData>;
   unlockedStage?: number;
+  unlockedMonth?: number;
 }
