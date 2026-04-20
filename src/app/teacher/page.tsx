@@ -335,6 +335,7 @@ export default function TeacherPage() {
   const [joinUrl, setJoinUrl] = useState("");
   const [creating, setCreating] = useState(false);
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+  const [qrModal, setQrModal] = useState<"boss" | "partner" | null>(null);
 
   async function createSession() {
     setCreating(true);
@@ -455,8 +456,8 @@ export default function TeacherPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-8">
         <div className="text-center">
-          <div className="text-5xl mb-3">👩‍🏫</div>
-          <h1 className="text-3xl font-bold text-amber-900 mb-1">老師端控制台</h1>
+          <div className="text-5xl mb-3">☕</div>
+          <h1 className="text-3xl font-bold text-amber-900 mb-1">咖啡廳爭霸戰 Dashboard</h1>
           <p className="text-amber-700">建立新的遊戲場次，取得 QR Code 讓學生加入</p>
         </div>
         <button
@@ -471,35 +472,98 @@ export default function TeacherPage() {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
+    <div className="min-h-screen p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-amber-900">☕ 老師端儀錶板</h1>
-            <p className="text-amber-700 text-sm">場次 ID：<code className="bg-amber-100 px-2 py-0.5 rounded text-xs">{sessionId}</code></p>
+            <h1 className="text-2xl font-bold text-amber-900">☕ 咖啡廳爭霸戰 Dashboard</h1>
+            <p className="text-amber-600 text-xs mt-0.5">場次 ID：<code className="bg-amber-100 px-2 py-0.5 rounded">{sessionId}</code></p>
           </div>
-          <div className="flex gap-3 flex-wrap">
-            <div className="text-center bg-white rounded-xl px-4 py-2 shadow-sm">
-              <div className="text-2xl font-bold text-amber-800">{stats.total}</div>
-              <div className="text-xs text-amber-700">組加入</div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Stats */}
+            <div className="text-center bg-white rounded-xl px-3 py-1.5 shadow-sm">
+              <div className="text-xl font-bold text-amber-800">{stats.total}</div>
+              <div className="text-xs text-amber-600">組加入</div>
             </div>
-            <div className="text-center bg-white rounded-xl px-4 py-2 shadow-sm">
-              <div className="text-2xl font-bold text-orange-600">{stats.playing}</div>
-              <div className="text-xs text-amber-700">生存戰中</div>
+            <div className="text-center bg-white rounded-xl px-3 py-1.5 shadow-sm">
+              <div className="text-xl font-bold text-orange-600">{stats.playing}</div>
+              <div className="text-xs text-amber-600">生存戰中</div>
             </div>
-            <div className="text-center bg-white rounded-xl px-4 py-2 shadow-sm">
-              <div className="text-2xl font-bold text-green-600">{stats.finished}</div>
-              <div className="text-xs text-amber-700">已完賽</div>
+            <div className="text-center bg-white rounded-xl px-3 py-1.5 shadow-sm">
+              <div className="text-xl font-bold text-green-600">{stats.finished}</div>
+              <div className="text-xs text-amber-600">已完賽</div>
             </div>
             {stats.waiting > 0 && (
-              <div className="text-center bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2 shadow-sm">
-                <div className="text-2xl font-bold text-yellow-700">{stats.waiting}</div>
-                <div className="text-xs text-yellow-700">等待放行</div>
+              <div className="text-center bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-1.5 shadow-sm">
+                <div className="text-xl font-bold text-yellow-700">{stats.waiting}</div>
+                <div className="text-xs text-yellow-600">等待放行</div>
               </div>
             )}
+            <div className="w-px h-8 bg-amber-200 hidden sm:block" />
+            {/* QR buttons */}
+            <button
+              onClick={() => setQrModal("boss")}
+              className="bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium px-3 py-2 rounded-xl transition flex items-center gap-1.5"
+            >
+              👨‍💼 老闆 QR
+            </button>
+            <button
+              onClick={() => setQrModal("partner")}
+              className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-3 py-2 rounded-xl transition flex items-center gap-1.5"
+            >
+              🧑‍🎓 合夥人 QR
+            </button>
+            <button
+              onClick={createSession}
+              className="bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium px-3 py-2 rounded-xl transition"
+            >
+              🔄 新場次
+            </button>
           </div>
         </div>
+
+        {/* QR Modal */}
+        {qrModal && (
+          <div
+            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+            onClick={() => setQrModal(null)}
+          >
+            <div
+              className="bg-white rounded-3xl p-8 flex flex-col items-center gap-5 w-full max-w-xs shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="font-bold text-xl text-amber-900">
+                {qrModal === "boss" ? "👨‍💼 老闆掃此 QR Code" : "🧑‍🎓 合夥人掃此 QR Code"}
+              </h2>
+              <div className={`p-3 rounded-2xl border-4 ${qrModal === "boss" ? "border-amber-400" : "border-green-400"}`}>
+                <QRCodeSVG
+                  value={qrModal === "boss" ? `${joinUrl}/boss` : `${joinUrl}/partner`}
+                  size={220}
+                  bgColor="#ffffff"
+                  fgColor={qrModal === "boss" ? "#92400e" : "#166534"}
+                />
+              </div>
+              <p className="text-xs text-center text-amber-600 break-all">
+                {qrModal === "boss" ? `${joinUrl}/boss` : `${joinUrl}/partner`}
+              </p>
+              <div className="flex gap-2 w-full">
+                <button
+                  onClick={() => navigator.clipboard.writeText(qrModal === "boss" ? `${joinUrl}/boss` : `${joinUrl}/partner`)}
+                  className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 font-medium py-2 rounded-xl text-sm transition"
+                >
+                  複製連結
+                </button>
+                <button
+                  onClick={() => setQrModal(null)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-xl text-sm transition"
+                >
+                  關閉
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stage Control Panel */}
         <div className="mb-6 bg-white rounded-2xl shadow p-5">
@@ -567,62 +631,20 @@ export default function TeacherPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* QR Code Panel */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow p-5 flex flex-col items-center gap-4 sticky top-4">
-              {/* Boss QR */}
-              <div className="w-full flex flex-col items-center gap-2 pb-4 border-b border-amber-100">
-                <div className="text-sm font-bold text-amber-900">👨‍💼 我要當老闆</div>
-                <div className="bg-white p-2 rounded-xl border-2 border-amber-400">
-                  <QRCodeSVG value={`${joinUrl}/boss`} size={140} bgColor="#ffffff" fgColor="#92400e" />
-                </div>
-                <button
-                  onClick={() => navigator.clipboard.writeText(`${joinUrl}/boss`)}
-                  className="w-full text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 font-medium py-1.5 rounded-lg transition"
-                >
-                  複製老闆連結
-                </button>
-              </div>
-              {/* Partner QR */}
-              <div className="w-full flex flex-col items-center gap-2 pb-4 border-b border-amber-100">
-                <div className="text-sm font-bold text-green-800">🧑‍🎓 我是合夥人</div>
-                <div className="bg-white p-2 rounded-xl border-2 border-green-400">
-                  <QRCodeSVG value={`${joinUrl}/partner`} size={140} bgColor="#ffffff" fgColor="#166534" />
-                </div>
-                <button
-                  onClick={() => navigator.clipboard.writeText(`${joinUrl}/partner`)}
-                  className="w-full text-xs bg-green-100 hover:bg-green-200 text-green-800 font-medium py-1.5 rounded-lg transition"
-                >
-                  複製合夥人連結
-                </button>
-              </div>
-              <button
-                onClick={createSession}
-                className="w-full text-sm bg-red-50 hover:bg-red-100 text-red-600 font-medium py-2 rounded-xl transition"
-              >
-                🔄 新場次
-              </button>
-            </div>
+        {/* Teams Grid */}
+        {teamList.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 text-amber-400">
+            <div className="text-5xl mb-3">⏳</div>
+            <p className="text-lg font-medium">等待學生加入中…</p>
+            <p className="text-sm">點擊上方 QR Code 按鈕讓學生掃碼加入</p>
           </div>
-
-          {/* Teams Grid */}
-          <div className="lg:col-span-3">
-            {teamList.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-amber-400">
-                <div className="text-5xl mb-3">⏳</div>
-                <p className="text-lg font-medium">等待學生加入中…</p>
-                <p className="text-sm">學生掃描 QR Code 即可加入遊戲</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                {teamList.map((team) => (
-                  <TeamCard key={team.id} team={team} unlockedStage={unlockedStage} />
-                ))}
-              </div>
-            )}
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {teamList.map((team) => (
+              <TeamCard key={team.id} team={team} unlockedStage={unlockedStage} />
+            ))}
           </div>
-        </div>
+        )}
 
         {/* Survival Battle Charts */}
         {teamsWithHistory.length > 0 && (
