@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { ref, onValue, off, set, remove, get } from "firebase/database";
+import { ref, onValue, off, set, remove } from "firebase/database";
 import { TeamData } from "@/lib/gameConfig";
 
 type Phase = "name" | "pick" | "wait";
@@ -22,6 +22,7 @@ function saveState(sessionId: string, data: { memberId: string; name: string; te
 
 export default function PartnerJoinPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const router = useRouter();
   const [phase, setPhase] = useState<Phase>("name");
   const [inputName, setInputName] = useState("");
   const [myName, setMyName] = useState("");
@@ -33,16 +34,28 @@ export default function PartnerJoinPage() {
   const memberIdRef = useRef(memberId);
   const joinedRef = useRef(joinedTeamId);
 
-  // Restore persisted state
+  // Restore persisted state (and redirect if game already started)
   useEffect(() => {
     const saved = loadState(sessionId);
-    if (saved) {
-      setMemberId(saved.memberId);
-      memberIdRef.current = saved.memberId;
-      setMyName(saved.name);
-      setJoinedTeamId(saved.teamId);
-      joinedRef.current = saved.teamId;
-      setPhase(saved.teamId ? "wait" : "pick");
+    if (!saved) return;
+    setMemberId(saved.memberId);
+    memberIdRef.current = saved.memberId;
+    setMyName(saved.name);
+    setJoinedTeamId(saved.teamId);
+    joinedRef.current = saved.teamId;
+
+    if (saved.teamId) {
+      // Check if game already started (handles page refresh after redirect)
+      const statusRef = ref(db, `sessions/${sessionId}/teams/${saved.teamId}/status`);
+      onValue(statusRef, (snap) => {
+        if (snap.val() === "active") {
+          router.push(`/spectator/${sessionId}/${saved.teamId}`);
+        } else {
+          setPhase("wait");
+        }
+      }, { onlyOnce: true });
+    } else {
+      setPhase("pick");
     }
   }, [sessionId]);
 
@@ -62,15 +75,18 @@ export default function PartnerJoinPage() {
     return () => off(teamsRef, "value", handler);
   }, [sessionId]);
 
-  // Watch joined team status
+  // Watch joined team status → redirect to spectator when game starts
   useEffect(() => {
     if (!joinedTeamId) return;
     const statusRef = ref(db, `sessions/${sessionId}/teams/${joinedTeamId}/status`);
     const handler = onValue(statusRef, (snap) => {
-      if (snap.val() === "active") setGameStarted(true);
+      if (snap.val() === "active") {
+        setGameStarted(true);
+        router.push(`/spectator/${sessionId}/${joinedTeamId}`);
+      }
     });
     return () => off(statusRef, "value", handler);
-  }, [sessionId, joinedTeamId]);
+  }, [sessionId, joinedTeamId, router]);
 
   function submitName() {
     const name = inputName.trim();
